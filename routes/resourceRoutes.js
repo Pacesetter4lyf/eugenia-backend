@@ -8,12 +8,8 @@ router.use(authController.protect);
 router.route('/user/:userDataId').get(resourceController.getUserResource);
 router
   .route('/')
-  .get(resourceController.getAllResources)
-  .post(
-    authController.restrictTo('user'),
-    resourceController.setTourUserIds,
-    resourceController.createResource
-  );
+  .get(resourceController.getLineageResource)
+
 
 router
   .route('/:id')

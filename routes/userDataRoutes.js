@@ -25,6 +25,7 @@ router.post(
 
 router.get('/search/:text', userDataController.search);
 router.get('/findpeople', userDataController.findPeople);
+router.get('/birthdays', userDataController.birthdays);
 
 router
   .route('/relationship/:A/:B')

@@ -34,10 +34,12 @@ const userDataSchema = new mongoose.Schema(
       type: 'string'
     },
     facebook: {
-      type: 'string'
+      type: 'string',
+      default: ''
     },
     address: {
-      type: 'string'
+      type: 'string',
+      default: ''
     },
     primarySchool: {
       type: 'string'
@@ -94,6 +96,10 @@ const userDataSchema = new mongoose.Schema(
       default: function() {
         return [Math.floor(100000 + Math.random() * 900000)];
       }
+    },
+    setting: {
+      type: mongoose.Schema.ObjectId,
+      ref: 'Setting'
     }
   },
   {

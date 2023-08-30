@@ -3,6 +3,7 @@ const UserData = require('../models/userDataModel');
 const factory = require('./handlerFactory');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
+const {getSetting, getFilter2, getViewer} = require('./utilityController');
 
 const { ObjectId } = require('mongodb');
 
@@ -37,6 +38,12 @@ exports.getSchema = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.getSetting = catchAsync(async (req, res, next) => {
+  const setting = getSetting(req)
+  req.setting = setting
+  next();
+});
+
 exports.updateUserSetting = catchAsync(async (req, res, next) => {
   const userId = req.params.id;
 
@@ -54,4 +61,4 @@ exports.updateUserSetting = catchAsync(async (req, res, next) => {
       data: setting
     }
   });
-}); 
+});

@@ -7,6 +7,8 @@ const factory = require('./handlerFactory');
 const UserData = require('../models/userDataModel');
 const JoinCode = require('./../models/joinCodeModel');
 const Resource = require('../models/resourceModel');
+const Setting = require('../models/settingModel');
+const { getSetting, getFilter2, getViewer } = require('./utilityController');
 
 // const multerStorage = multer.diskStorage({
 //   destination: (req, file, cb) => {
@@ -161,6 +163,15 @@ exports.createUser = catchAsync(async (req, res, next) => {
   console.log('creating...', filteredBody);
   const updatedUser = await UserData.create(filteredBody);
   console.log('created..!');
+
+  //start
+  //create the setting
+  const setting = await Setting.create({ userData: updatedUser.id });
+  const settingId = setting.id;
+  await UserData.findByIdAndUpdate(updatedUser.id, { setting: settingId });
+  console.log('setting ....', setting);
+  // end
+
   let relationship;
   // if you are appending, set up the relationship
   if (req.body.mode !== 'self') {
@@ -186,6 +197,7 @@ exports.createUser = catchAsync(async (req, res, next) => {
     const session = req.session;
     await session.startTransaction();
     linkAll(updatedUser, appendAs, session);
+
     //commitTransaction
     await session.commitTransaction();
   }
@@ -195,7 +207,7 @@ exports.createUser = catchAsync(async (req, res, next) => {
     // console.log('reg...', req.user.id);
     await User.findByIdAndUpdate(
       req.user.id,
-      { isRegistered: true },
+      { isRegistered: updatedUser.id },
       // { isRegistered: updatedUser.id },
 
       {
@@ -647,10 +659,47 @@ exports.getUserWithId_ = catchAsync(async (req, res, next) => {
     return next(new AppError('No document found with that ID', 404));
   }
 
+  const settingsObject = await getSetting(req);
+  const settings = {};
+  settingsObject.forEach(item => {
+    const field = Object.keys(item)[0];
+    settings[field] = item[field];
+  });
+
+  const viewer = await getViewer(req);
+  //
+  let copiedDoc = { ...doc.toObject() };
+
+  console.log('settings ', settings, viewer);
+  // if(      viewer !== 'self' &&
+  // viewer !== 'user-viewing' &&
+  // viewer !== 'i-admin'){}
+  // check whether the field is allowed
+  Object.keys(settings).forEach(field => {
+    if (
+      viewer === 'self' ||
+      viewer === 'user-viewing' ||
+      viewer === 'i-admin'
+    ) {
+      // pass
+    } else if (viewer === 'lineage') {
+      // lineage viewing can see lineage, public nor self
+      if (settings[field] === 'self') {
+        delete copiedDoc[field];
+      }
+    } else if (viewer === 'public') {
+      // cannot see lineage and self
+      if (settings[field] === 'self' || settings[field] === 'lineage') {
+        delete copiedDoc[field];
+      }
+    }
+  });
+  console.log('settings ', settings, viewer, copiedDoc);
+
   res.status(200).json({
     status: 'success',
     data: {
-      data: doc
+      data: copiedDoc
     }
   });
 });
@@ -711,6 +760,7 @@ exports.deleteUser = catchAsync(async (req, res, next) => {
     { $pull: { child: toDelete } }
   );
 
+  await Setting.findOneAndRemove({ userData: toDelete });
   const doc = await UserData.findByIdAndRemove(toDelete);
 
   if (!doc) {
@@ -727,6 +777,8 @@ exports.deleteUser = catchAsync(async (req, res, next) => {
 
 exports.search = catchAsync(async (req, res, next) => {
   const searchText = req.params.text;
+  const searchOutside = req.query.searchOutside;
+
   const user = req.user;
   const userData = await UserData.find({ userId: user._id });
 
@@ -735,14 +787,21 @@ exports.search = catchAsync(async (req, res, next) => {
 
   // console.log(searchText, lineage, userData);
 
+  let lineageFIlter;
+  if (searchOutside === 'true') {
+    lineageFIlter = { $nin: lineage };
+  } else {
+    lineageFIlter = { $in: lineage };
+  }
+
   const results = await UserData.find({
     $or: [
       { firstName: { $regex: searchText, $options: 'i' } },
       { lastName: { $regex: searchText, $options: 'i' } }
     ],
-    lineage: { $in: lineage }
+    lineage: lineageFIlter
   })
-    .select('firstName lastName father mother')
+    .select('firstName lastName father mother id')
     .populate({
       path: 'father',
       select: 'firstName lastName _id'
@@ -1510,7 +1569,7 @@ exports.linkNode = catchAsync(async (req, res, next) => {
 
   await session.startTransaction();
 
-  const user = UserData.findOne(id).session(session);
+  const user = await UserData.findOne(id).session(session); // just added await
   await linkAll(user, relationship, session);
 
   await session.commitTransaction();
@@ -1519,6 +1578,32 @@ exports.linkNode = catchAsync(async (req, res, next) => {
     status: 'success',
     data: {
       data: `member status updated: ${action}`
+    }
+  });
+});
+
+exports.birthdays = catchAsync(async (req, res, next) => {
+  const lineage = req.user.lineage;
+
+  const users = await UserData.find({ lineage: { $in: lineage } })
+    .populate({
+      path: 'setting'
+    })
+    .select('firstName lastName dateOfBirth setting');
+
+  const filteredUsers = users.filter(
+    user => user?.setting?.dateOfBirth !== 'self'
+  );
+
+  const finalUsers = filteredUsers.map(user => {
+    const { setting, ...userWithoutSetting } = user.toObject();
+    return userWithoutSetting;
+  });
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      data: finalUsers
     }
   });
 });

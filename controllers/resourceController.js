@@ -2,6 +2,7 @@ const Resource = require('./../models/resourceModel');
 const factory = require('./handlerFactory');
 const catchAsync = require('./../utils/catchAsync');
 const AppError = require('./../utils/appError');
+const { getSetting, getFilter2, getViewer } = require('./utilityController');
 
 exports.setTourUserIds = (req, res, next) => {
   // Allow nested routes
@@ -25,23 +26,127 @@ exports.getUserResource = catchAsync(async (req, res, next) => {
   console.log('userResource', userDataId);
 
   if (!userDataId) {
-    next(
-      new AppError(
-        'Please provide the user data identifier',
-        400
-      )
-    );
+    next(new AppError('Please provide the user data identifier', 400));
+  }
+
+  const viewer = await getViewer(req);
+  let selector;
+
+  if (viewer === 'self' || viewer === 'user-viewing' || viewer === 'i-admin') {
+    selector = [
+      {
+        $or: [
+          { viewableBy: 'self' },
+          { viewableBy: 'lineage' },
+          { viewableBy: 'public' }
+        ]
+      }
+    ];
+  } else if (viewer === 'lineage') {
+    selector = [{ $or: [{ viewableBy: 'lineage' }, { viewableBy: 'public' }] }];
+  } else if (viewer === 'public') {
+    selector = [{ viewableBy: 'public' }];
   }
 
   const resource = await Resource.find({
-    user: userDataId
-  }).populate({ path: 'user' });
+    user: userDataId,
+    $and: selector
+  }).populate({ path: 'user', select: 'firstName lastName id _id' });
 
   res.status(200).json({
     status: 'success',
     results: resource.length,
     data: {
       data: resource
+    }
+  });
+});
+
+exports.getLineageResource = catchAsync(async (req, res, next) => {
+  const userLineage = req.user.lineage;
+  const userDataId = req.user.userDataId;
+  // give me all the resources
+  // where the user is in the lineage of the user who has the resource
+
+  console.log('booyah...');
+
+  const lineageResources = await Resource.aggregate([
+    {
+      $lookup: {
+        from: 'userdatas', // Replace with the actual name of the User collection
+        localField: 'user',
+        foreignField: '_id',
+        as: 'userDetails'
+      }
+    },
+    {
+      $unwind: '$userDetails' // Unwind the array to get each user details document separately
+    },
+    {
+      $addFields: {
+        user: {
+          firstName: '$userDetails.firstName',
+          lastName: '$userDetails.lastName',
+          id: '$userDetails._id'
+        }
+      }
+    },
+
+    {
+      $match: {
+        $or: [
+          // { 'user.id': new ObjectId(userDataId) }, commmented out, the user will not see his resource in lineage
+          {
+            $and: [
+              { 'userDetails.lineage': { $in: userLineage } },
+              {
+                $or: [
+                  { viewableBy: 'public' },
+                  { viewableBy: 'lineage' },
+                  { viewableBy: { $exists: false } }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      $unset: 'userDetails' // Remove the userDetails field
+    }
+  ]);
+
+  // const lineageResources = await Resource.find({})
+  //   .populate({
+  //     path: 'user',
+  //     select: 'firstName lastName lineage _id'
+  //   })
+  //   .where({
+  //     $or: [
+  //       {
+  //         $and: [
+  //           { 'user.lineage': { $in: userLineage } },
+  //           {
+  //             $or: [
+  //               { viewableBy: 'public' },
+  //               { viewableBy: 'lineage' },
+  //               { viewableBy: { $exists: false } }
+  //             ]
+  //           }
+  //         ]
+  //       }
+  //     ]
+  //   })
+  //   .select('-user.lineage')
+  //   .lean(); // Add .lean() to get plain JavaScript objects instead of Mongoose documents
+
+  // do the filtering here
+
+  res.status(200).json({
+    status: 'success',
+    results: lineageResources.length,
+    data: {
+      data: lineageResources
     }
   });
 });

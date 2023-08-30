@@ -77,10 +77,10 @@ exports.getChat = catchAsync(async (req, res, next) => {
     },
     {
       $addFields: {
-        sentByUser: { $eq: ['$from', userDataId] },
+        sentByUser: { $eq: ['$from', new ObjectId(userDataId)] },
         toId: {
           $cond: {
-            if: { $eq: ['$from', userDataId] },
+            if: { $eq: ['$from', new ObjectId(userDataId)] },
             then: '$to',
             else: '$from'
           }
@@ -134,7 +134,7 @@ exports.getChat = catchAsync(async (req, res, next) => {
     }
   ]);
 
-  //   console.log('chat', chat);
+  // console.log('chat', userDataId, chat);
 
   res.status(200).json({
     status: 'success',
