@@ -16,12 +16,14 @@ exports.deleteOne = Model =>
     });
   });
 
-exports.updateOne = Model =>
+exports.updateOne = (Model, popOptions) =>
   catchAsync(async (req, res, next) => {
     const doc = await Model.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true
     });
+
+    await doc.populate(popOptions)
 
     if (!doc) {
       return next(new AppError('No document found with that ID', 404));
