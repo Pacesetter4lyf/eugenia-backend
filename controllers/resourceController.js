@@ -12,7 +12,7 @@ exports.setTourUserIds = (req, res, next) => {
 };
 const popOptions = {
   path: 'user',
-  select: 'firstName lastName -_id'
+  select: 'firstName lastName _id'
 };
 exports.getAllResources = factory.getAll(Resource, popOptions);
 exports.getResource = factory.getOne(Resource, popOptions);

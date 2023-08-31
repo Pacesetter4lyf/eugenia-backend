@@ -21,9 +21,7 @@ exports.updateOne = (Model, popOptions) =>
     const doc = await Model.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true
-    });
-
-    await doc.populate(popOptions)
+    }).populate(popOptions);
 
     if (!doc) {
       return next(new AppError('No document found with that ID', 404));
