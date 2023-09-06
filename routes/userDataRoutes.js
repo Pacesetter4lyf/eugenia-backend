@@ -1,5 +1,4 @@
 const express = require('express');
-const userController = require('./../controllers/userController');
 const authController = require('./../controllers/authController');
 const userDataController = require('./../controllers/userDataController');
 const settingController = require('./../controllers/settingController');
@@ -18,8 +17,8 @@ router.get(
 );
 router.post(
   '/createUser',
-  userController.uploadUserPhoto,
-  userController.resizeUserPhoto,
+  userDataController.uploadUserPhoto,
+  userDataController.resizeUserPhoto,
   userDataController.createUser
 );
 
@@ -47,8 +46,8 @@ router
   .route('/:id')
   .get(userDataController.getUserWithId_)
   .patch(
-    userController.uploadUserPhoto,
-    userController.resizeUserPhoto,
+    userDataController.uploadUserPhoto,
+    userDataController.resizeUserPhoto,
     userDataController.updateMe
   )
   .delete(userDataController.deleteUser);

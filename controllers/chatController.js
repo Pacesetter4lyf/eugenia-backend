@@ -18,7 +18,9 @@ exports.createChat = catchAsync(async (req, res, next) => {
   if (!receiver) {
     return next(new AppError('No document found with that ID', 404));
   }
-
+  const { userDataId } = req.user;
+  req.body.from = userDataId
+  
   let doc = await Chat.create(req.body);
 
   doc = await doc

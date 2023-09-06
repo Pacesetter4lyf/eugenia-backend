@@ -58,7 +58,7 @@ const userDataSchema = new mongoose.Schema(
     },
     photo: {
       type: String,
-      default: 'default.jpg'
+      default: 'https://ucarecdn.com/f44a4885-293e-4518-be59-1e8b3c84881b/'
     },
     adminOf: {
       type: [Number]

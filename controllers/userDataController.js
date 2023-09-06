@@ -1,5 +1,11 @@
 const multer = require('multer');
 const sharp = require('sharp');
+// import { storeFile, UploadcareSimpleAuthSchema } from '@uploadcare/rest-client';
+const {
+  deleteFile,
+  UploadcareSimpleAuthSchema
+} = require('@uploadcare/rest-client');
+const { base } = require('@uploadcare/upload-client');
 const User = require('./../models/userModel');
 const catchAsync = require('./../utils/catchAsync');
 const AppError = require('./../utils/appError');
@@ -10,15 +16,6 @@ const Resource = require('../models/resourceModel');
 const Setting = require('../models/settingModel');
 const { getSetting, getFilter2, getViewer } = require('./utilityController');
 
-// const multerStorage = multer.diskStorage({
-//   destination: (req, file, cb) => {
-//     cb(null, 'public/img/users');
-//   },
-//   filename: (req, file, cb) => {
-//     const ext = file.mimetype.split('/')[1];
-//     cb(null, `user-${req.user.id}-${Date.now()}.${ext}`);
-//   }
-// });
 const multerStorage = multer.memoryStorage();
 
 const multerFilter = (req, file, cb) => {
@@ -27,6 +24,47 @@ const multerFilter = (req, file, cb) => {
   } else {
     cb(new AppError('Not an image! Please upload only images.', 400), false);
   }
+};
+
+const uploadAnyFileToUploadCare = async (req, isCreating) => {
+  console.log('incoming file ', req.file);
+  // fileData must be `Blob` or `File` or `Buffer`
+  const result = await base(req.file.buffer, {
+    publicKey: process.env.UPLOAD_CARE_PUBLIC_KEY,
+    store: '0',
+    metadata: {
+      subsystem: 'uploader',
+      tag: 'user profile'
+    }
+  });
+  if (!isCreating) {
+    const sameUser = await UserData.findById(req.params.id);
+    if (
+      sameUser.photo !==
+      'https://ucarecdn.com/f44a4885-293e-4518-be59-1e8b3c84881b/'
+    ) {
+      // delete the previous photo
+      const uploadcareSimpleAuthSchema = new UploadcareSimpleAuthSchema({
+        publicKey: process.env.UPLOAD_CARE_PUBLIC_KEY,
+        secretKey: process.env.UPLOAD_CARE_PRIVATE_KEY
+      });
+      try {
+        const result = await deleteFile(
+          {
+            uuid: sameUser.photo.split('/')[3]
+          },
+          { authSchema: uploadcareSimpleAuthSchema }
+        );
+        console.log('result ', result);
+      } catch (err) {
+        console.log('error occured deleting the file');
+      }
+    }
+  }
+
+  if (result?.file) {
+    return `https://ucarecdn.com/${result.file}/`;
+  } else return 'https://ucarecdn.com/f44a4885-293e-4518-be59-1e8b3c84881b/';
 };
 
 const upload = multer({
@@ -39,14 +77,11 @@ exports.uploadUserPhoto = upload.single('photo');
 exports.resizeUserPhoto = catchAsync(async (req, res, next) => {
   if (!req.file) return next();
 
-  req.file.filename = `user-${req.user.id}-${Date.now()}.jpeg`;
-
-  await sharp(req.file.buffer)
+  req.file.buffer = await sharp(req.file.buffer)
     .resize(500, 500)
     .toFormat('jpeg')
     .jpeg({ quality: 90 })
-    .toFile(`public/img/users/${req.file.filename}`);
-
+    .toBuffer();
   next();
 });
 
@@ -76,8 +111,10 @@ exports.updateMe = catchAsync(async (req, res, next) => {
   //   console.log(req.file, req.body);
   // 2) Filtered out unwanted fields names that are not allowed to be updated
   const filteredBody = filterObj(req.body, 'name', 'email');
-  if (req.file) filteredBody.photo = req.file.filename;
-  filteredBody.userId = req.user.id;
+  if (req.file)
+    filteredBody.photo = await uploadAnyFileToUploadCare(req, false);
+
+  // filteredBody.userId = req.user.id;
 
   // 3) Update user document
   const updatedUser = await UserData.findByIdAndUpdate(
@@ -111,7 +148,9 @@ exports.createUser = catchAsync(async (req, res, next) => {
   // console.log(req.body.mode);
   // 2) Filtered out unwanted fields names that are not allowed to be updated
   const filteredBody = filterObj(req.body, 'name', 'email');
-  if (req.file) filteredBody.photo = req.file.filename;
+  if (req.file) filteredBody.photo = await uploadAnyFileToUploadCare(req, true);
+
+  // here we have to send the photo, delete the previous and get the new url
 
   // get and append the lineage number
   if (req.body.mode === 'self') {
