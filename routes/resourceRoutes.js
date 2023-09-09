@@ -9,6 +9,7 @@ router.route('/user/:userDataId').get(resourceController.getUserResource);
 router
   .route('/')
   .get(resourceController.getLineageResource)
+  .post(resourceController.createResource)
 
 
 router

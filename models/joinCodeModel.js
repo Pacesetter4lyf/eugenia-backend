@@ -31,6 +31,10 @@ const joinCodeSchema = new mongoose.Schema(
       type: mongoose.Schema.ObjectId,
       ref: 'UserData'
     },
+    sentBy: {
+      type: mongoose.Schema.ObjectId,
+      ref: 'UserData'
+    },
     status: {
       type: String,
       default: 'created'

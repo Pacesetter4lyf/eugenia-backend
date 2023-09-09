@@ -151,7 +151,7 @@ exports.createUser = catchAsync(async (req, res, next) => {
   if (req.file) filteredBody.photo = await uploadAnyFileToUploadCare(req, true);
 
   // here we have to send the photo, delete the previous and get the new url
-
+  console.log('mode ', req.body.mode);
   // get and append the lineage number
   if (req.body.mode === 'self') {
     filteredBody.userId = req.user.id;
@@ -1369,6 +1369,13 @@ exports.changeMemberStatus = catchAsync(async (req, res, next) => {
   const memberLineage = lineageMember.lineage;
   console.log('lineage memeer', lineageMember);
   const intersect = memberLineage.filter(item => adminOf.includes(item));
+  console.log(
+    'intersect ',
+    intersect,
+    lineageMember.createdBy?.equals(req.user.userDataId),
+    memberLineage.length === 1,
+    !lineageMember.userId
+  );
   if (intersect.length) {
     // the user is an admin of what he wants to remove
     // check if it was created by me
