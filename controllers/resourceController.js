@@ -3,6 +3,18 @@ const factory = require('./handlerFactory');
 const catchAsync = require('./../utils/catchAsync');
 const AppError = require('./../utils/appError');
 const { getSetting, getFilter2, getViewer } = require('./utilityController');
+const multer = require('multer');
+const {
+  deleteFile,
+  UploadcareSimpleAuthSchema
+} = require('@uploadcare/rest-client');
+const { base } = require('@uploadcare/upload-client');
+
+const multerStorage = multer.memoryStorage();
+const upload = multer({
+  storage: multerStorage
+});
+exports.parseFile = upload.single('file');
 
 exports.setTourUserIds = (req, res, next) => {
   // Allow nested routes
@@ -19,6 +31,60 @@ exports.getResource = factory.getOne(Resource, popOptions);
 exports.createResource = factory.createOne(Resource, popOptions);
 exports.updateResource = factory.updateOne(Resource, popOptions);
 exports.deleteResource = factory.deleteOne(Resource);
+
+const deleteUploadCareFile = async resourceUrl => {
+  const uploadcareSimpleAuthSchema = new UploadcareSimpleAuthSchema({
+    publicKey: process.env.UPLOAD_CARE_PUBLIC_KEY,
+    secretKey: process.env.UPLOAD_CARE_PRIVATE_KEY
+  });
+  try {
+    await deleteFile(
+      {
+        uuid: resourceUrl.split('/')[3]
+      },
+      { authSchema: uploadcareSimpleAuthSchema }
+    );
+  } catch (err) {
+    console.log('error occured deleting the file');
+  }
+};
+
+const uploadFileToUploadCare = async (req, isCreating) => {
+  console.log('incoming file ', req.file);
+  // fileData must be `Blob` or `File` or `Buffer`
+  const result = await base(req.file.buffer, {
+    publicKey: process.env.UPLOAD_CARE_PUBLIC_KEY,
+    store: 'auto',
+    metadata: {
+      subsystem: 'uploader',
+      tag: 'user profile'
+    }
+  });
+  if (!isCreating) {
+    const oldResource = await Resource.findById(req.body.resourceId);
+    const resourceUrl = oldResource.url
+    deleteUploadCareFile(resourceUrl)
+  }
+  if (result?.file) {
+    req.body.url = `https://ucarecdn.com/${result.file}/`;
+  }
+};
+
+exports.processFile = catchAsync(async (req, res, next) => {
+  console.log('req', req.file, req.method);
+  if (req.file) {
+    if (req.body.resourceId) await uploadFileToUploadCare(req, false);
+    else await uploadFileToUploadCare(req, true);
+  }
+
+  if (req.method === 'DELETE') {
+    const resourceId = req.params.id
+    const oldResource = await Resource.findById(resourceId);
+    const resourceUrl = oldResource.url
+    deleteUploadCareFile(resourceUrl)
+  }
+  next();
+});
 
 exports.getUserResource = catchAsync(async (req, res, next) => {
   const { userDataId } = req.params;

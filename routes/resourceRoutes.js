@@ -9,14 +9,19 @@ router.route('/user/:userDataId').get(resourceController.getUserResource);
 router
   .route('/')
   .get(resourceController.getLineageResource)
-  .post(resourceController.createResource)
-
+  .post(
+    resourceController.parseFile,
+    resourceController.processFile,
+    resourceController.createResource
+  );
 
 router
   .route('/:id')
   .get(resourceController.getResource)
   .patch(
     // authController.restrictTo('user', 'admin'),
+    resourceController.parseFile,
+    resourceController.processFile,
     resourceController.updateResource
   )
   .delete(
