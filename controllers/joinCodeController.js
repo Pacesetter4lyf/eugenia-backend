@@ -82,9 +82,11 @@ exports.updateJoinRequest = catchAsync(async (req, res, next) => {
 
   const { id } = req.params;
   let updatedCode = {
-    ...req.body,
-    sentBy: req.user.userDataId
+    ...req.body
   };
+  if (req.body.newRequest) {
+    updatedCode.sentBy = req.user.userDataId;
+  }
 
   const relationship = await JoinCode.findByIdAndUpdate(id, updatedCode);
 
