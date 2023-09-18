@@ -499,7 +499,22 @@ async function linkAll(updatedUser, appendAs, session) {
     sibling3 = mother?.child;
 
     console.log('results ... ', sibling1, sibling2, sibling3);
-    let actualSibling = sibling1 || sibling2 || sibling3;
+    // let actualSibling = sibling1 || sibling2 || sibling3;
+
+    let actualSibling = sibling1;
+    if (
+      !actualSibling ||
+      (sibling2 && sibling2.length > actualSibling.length)
+    ) {
+      actualSibling = sibling2;
+    }
+    if (
+      !actualSibling ||
+      (sibling3 && sibling3.length > actualSibling.length)
+    ) {
+      actualSibling = sibling3;
+    }
+
     if (actualSibling && actualSibling.length) {
       console.log('actual sibling ', actualSibling);
       console.log('updated user sibling ', updatedUser.sibling);
