@@ -426,7 +426,7 @@ async function linkAll(updatedUser, appendAs, session) {
       // update all the .husband in each wife in the array
       await UserData.updateMany(
         { _id: { $in: wife } },
-        { $$addToSet: { husband: updatedUser.id } },
+        { $addToSet: { husband: updatedUser.id } },
         { session }
       );
     }
@@ -469,7 +469,9 @@ async function linkAll(updatedUser, appendAs, session) {
     if (sibling1 && sibling1.length > 0) {
       temp = [...sibling1];
       console.log('..... will soon process');
-      sibling1 = await UserData.find({ id: { $in: sibling1 } }).session(
+      sibling1 = sibling1.map(objectID => objectID.toString()); //convert to string
+      console.log('sibling1 AA', sibling1);
+      sibling1 = await UserData.find({ _id: { $in: sibling1 } }).session(
         session
       );
       console.log('..... has just processed');
@@ -518,12 +520,24 @@ async function linkAll(updatedUser, appendAs, session) {
     if (actualSibling && actualSibling.length) {
       console.log('actual sibling ', actualSibling);
       console.log('updated user sibling ', updatedUser.sibling);
+
+      const updatedUserSiblingStrings = updatedUser.sibling.map(id =>
+        id.toString()
+      );
+      const actualSiblingStrings = actualSibling.map(id => id.toString());
+
       updatedUser.sibling = Array.from(
         new Set(
-          [...updatedUser.sibling, ...actualSibling].filter(
+          [...updatedUserSiblingStrings, ...actualSiblingStrings].filter(
             id => id != updatedUser.id
           )
         )
+      );
+
+      console.log(
+        'typeof ',
+        typeof updatedUser.sibling[0],
+        typeof actualSibling[0]
       );
       console.log('updated user sibling after ', updatedUser.sibling);
       await updatedUser.save({ session });
@@ -879,6 +893,7 @@ exports.getRelationship = catchAsync(async (req, res, next) => {
   const B = req.params.B;
 
   const dataA = await UserData.findById(A);
+  const dataB = await UserData.findById(B);
   let relationship;
   if (dataA.father == B) {
     relationship = 'father';
@@ -1300,7 +1315,7 @@ exports.merge = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: 'success',
     data: {
-      data: 'merged successfully'
+      data: incomingNodeUser
     }
   });
 });
@@ -1375,7 +1390,7 @@ exports.changeMemberStatus = catchAsync(async (req, res, next) => {
   const adminOf = req.user.adminOf;
   const userId = req.user.id;
   const session = req.session;
-
+  let todo = 'nothing';
   await session.startTransaction();
 
   // check whether user is an admin of the id
@@ -1400,6 +1415,7 @@ exports.changeMemberStatus = catchAsync(async (req, res, next) => {
         memberLineage.length === 1 &&
         !lineageMember.userId
       ) {
+        todo = 'archive';
         // it was created by the user and has only one lineage
         // archive it and everywhere it id shows up up in userData and  resource
         // send the node and resources to archive
@@ -1468,6 +1484,7 @@ exports.changeMemberStatus = catchAsync(async (req, res, next) => {
         }).session(session);
         // remove the relationship to the node from userdata
       } else if (memberLineage.length > 1) {
+        todo = 'remove';
         lineageMember.lineage = memberLineage.filter(
           lineage => lineage !== +lineageToRemove
         );
@@ -1559,6 +1576,7 @@ exports.changeMemberStatus = catchAsync(async (req, res, next) => {
       memberLineage.length === 1 &&
       !lineageMember.userId
     ) {
+      todo = 'reinstate';
       await UserData.findByIdAndUpdate(
         id,
         {
@@ -1580,7 +1598,7 @@ exports.changeMemberStatus = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: 'success',
     data: {
-      data: `member status updated: ${action}`
+      data: `${todo}`
     }
   });
 });

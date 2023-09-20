@@ -13,6 +13,7 @@ exports.createJoinCode = catchAsync(async (req, res, next) => {
     ...req.body,
     generatedBy: req.user.userDataId
   });
+  await doc.populate('userData').execPopulate();
 
   res.status(201).json({
     status: 'success',
@@ -88,7 +89,7 @@ exports.updateJoinRequest = catchAsync(async (req, res, next) => {
     updatedCode.sentBy = req.user.userDataId;
   }
 
-  const relationship = await JoinCode.findByIdAndUpdate(id, updatedCode);
+  const relationship = await JoinCode.findByIdAndUpdate(id, updatedCode, { new: true });
 
   res.status(200).json({
     status: 'success',
@@ -120,6 +121,8 @@ exports.plantDetails = catchAsync(async (req, res, next) => {
   // dislodge the linkages of the nodeTo
   // attach the linkages of the nodeTo using the append mode
   // you can then manually buikd relationships between
+
+  console.log('here 1')
   // change status to merged
   const session = req.session;
 
