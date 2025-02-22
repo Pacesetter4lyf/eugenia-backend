@@ -4,10 +4,6 @@ const validator = require('validator');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
-  // name: {
-  //   type: String,
-  //   required: [true, 'Please tell us your name!']
-  // },
   email: {
     type: String,
     required: [true, 'Please provide your email'],
@@ -21,48 +17,41 @@ const userSchema = new mongoose.Schema({
     minlength: 8,
     select: false
   },
-  gender: {
-    type: 'string',
-    default: 'female'
-  },
-
-  photo: {
-    type: String,
-    default: 'default.jpg'
-  },
   role: {
     type: String,
     enum: ['user', 'guide', 'lead-guide', 'admin'],
     default: 'user'
   },
-  // isRegistered: {
-  //   type: Boolean,
-  //   default: false
-  // },
-  isRegistered: {
-    type: mongoose.Schema.ObjectId,
-    ref: 'UserData'
+  emailVerified: {
+    type: Boolean,
+    default: false
   },
-
-  // passwordConfirm: {
-  //   type: String,
-  //   required: [true, 'Please confirm your password'],
-  //   validate: {
-  //     // This only works on CREATE and SAVE!!!
-  //     validator: function(el) {
-  //       return el === this.password;
-  //     },
-  //     message: 'Passwords are not the same!'
-  //   }
+  // isRegistered: {
+  //   type: mongoose.Schema.ObjectId,
+  //   ref: 'UserData'
   // },
+
+  passwordConfirm: {
+    type: String,
+    required: [true, 'Please confirm your password'],
+    validate: {
+      // This only works on CREATE and SAVE!!!
+      validator: function(el) {
+        return el === this.password;
+      },
+      message: 'Passwords are not the same!'
+    }
+  },
   passwordChangedAt: Date,
   passwordResetToken: String,
   passwordResetExpires: Date,
-  active: {
-    type: Boolean,
-    default: true,
-    select: false
-  }
+  emailVerifyToken: String,
+  emailVerifyExpires: Date
+  // active: {
+  //   type: Boolean,
+  //   default: true,
+  //   select: false
+  // }
 });
 
 userSchema.pre('save', async function(next) {
@@ -89,6 +78,21 @@ userSchema.pre(/^find/, function(next) {
   this.find({ active: { $ne: false } });
   next();
 });
+
+userSchema.methods.createEmailVerifyToken = function() {
+  const resetToken = crypto.randomBytes(32).toString('hex');
+
+  this.emailVerifyToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+
+  // console.log({ resetToken }, this.passwordResetToken);
+
+  this.emailVerifyExpires = Date.now() + 10 * 60 * 1000;
+
+  return resetToken;
+};
 
 userSchema.methods.correctPassword = async function(
   candidatePassword,

@@ -39,18 +39,159 @@ const createSendToken = (user, statusCode, req, res) => {
 
 exports.signup = catchAsync(async (req, res, next) => {
   const newUser = await User.create({
-    name: req.body.name,
     email: req.body.email,
     password: req.body.password,
     passwordConfirm: req.body.passwordConfirm
   });
-  console.log('here');
 
-  const url = `${req.protocol}://${req.get('host')}/me`;
-  // console.log(url);
-  // await new Email(newUser, url).sendWelcome();
+  // 2) Generate the random reset token
+  const verifyToken = newUser.createEmailVerifyToken();
+  await newUser.save({
+    validateBeforeSave: false
+  });
 
+  // 3) Send it to user's email
+  try {
+    const verifyURL = `${req.protocol}://${req.get(
+      'host'
+    )}/api/v1/users/verifyEmail/${req.body.email}/${verifyToken}`;
+    await new Email(newUser, verifyURL).sendWelcome();
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Please check your email to verify your email address!'
+    });
+  } catch (err) {
+    newUser.emailVerifyToken = undefined;
+    newUser.emailVerifyExpires = undefined;
+    await newUser.save({
+      validateBeforeSave: false
+    });
+
+    return next(
+      new AppError('There was an error sending the email. Try again later!'),
+      500
+    );
+  }
+});
+
+exports.resendVerifyEmail = catchAsync(async (req, res, next) => {
+  const user = await User.findOne({
+    email: req.body.email
+  });
+
+  // 2) Generate the random reset token
+  const verifyToken = user.createEmailVerifyToken();
+  await user.save({
+    validateBeforeSave: false
+  });
+
+  // 3) Send it to user's email
+  try {
+    const verifyURL = `${req.protocol}://${req.get(
+      'host'
+    )}/api/v1/users/verifyEmail/${req.body.email}/${verifyToken}`;
+    await new Email(user, verifyURL).sendWelcome();
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Please check your email to verify your email address!'
+    });
+  } catch (err) {
+    user.emailVerifyToken = undefined;
+    user.emailVerifyExpires = undefined;
+    await user.save({
+      validateBeforeSave: false
+    });
+
+    return next(
+      new AppError('There was an error sending the email. Try again later!'),
+      500
+    );
+  }
+});
+
+exports.signup2 = catchAsync(async (req, res, next) => {
+  const newUser = await User.create({
+    email: req.body.email,
+    password: req.body.password,
+    passwordConfirm: req.body.passwordConfirm
+  });
+
+  // get the token and  the expiry
+  const token = signToken(newUser._id);
+  const tokenExpirationDate = new Date(
+    Date.now() + process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000
+  );
+  const url = `${req.protocol}://${req.get(
+    'host'
+  )}/auth/verify?token=${token}&expiration=${tokenExpirationDate}`;
+  console.log(url);
+
+  // send the email to the user
+  await new Email(newUser, url).sendWelcome();
+
+  // create send token and send the info to the user
   createSendToken(newUser, 201, req, res);
+});
+
+exports.verifyEmail = catchAsync(async (req, res, next) => {
+  // 1) Get user based on the token
+  const hashedToken = crypto
+    .createHash('sha256')
+    .update(req.params.token)
+    .digest('hex');
+
+  const user = await User.findOne({
+    emailVerifyToken: hashedToken,
+    emailVerifyExpires: {
+      $gt: Date.now()
+    }
+  });
+
+  // 2) If token has not expired, and there is user, set the new password
+  if (!user) {
+    return next(new AppError('Token is invalid or has expired', 400));
+  }
+  user.emailVerified = true;
+  user.emailVerifyToken = undefined;
+  user.emailVerifyExpires = undefined;
+  await user.save({
+    validateBeforeSave: false
+  });
+
+  // 3) Update changedPasswordAt property for the user
+  // 4) Log the user in, send JWT
+  // createSendToken(user, 200, req, res);
+  res.status(200).json({
+    status: 'success',
+    message: 'Email verified. Please proceed to login'
+  });
+});
+
+exports.verifyEmail2 = catchAsync(async (req, res, next) => {
+  const { email, token } = req.body;
+
+  // 1) Check if email and password exist
+  if (!email || !token) {
+    return next(new AppError('Please provide email and password!', 400));
+  }
+  // 2) Check if user exists && get the id
+  const user = await User.findOne({ email }).select('+_id');
+
+  // 3) decode the token and make sure the id or email matches
+  const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
+
+  console.log('DECODED ', decoded);
+
+  if (user._id !== decoded.id && Date.now() < decoded.exp) {
+    return next(new AppError('wrong user or expired token', 401));
+  }
+
+  // set email verified to true
+
+  // 3) If everything ok, send token to client
+  createSendToken(user, 200, req, res);
 });
 
 exports.login = catchAsync(async (req, res, next) => {
@@ -61,11 +202,18 @@ exports.login = catchAsync(async (req, res, next) => {
     return next(new AppError('Please provide email and password!', 400));
   }
   // 2) Check if user exists && password is correct
-  const user = await User.findOne({ email }).select('+password');
+  const user = await User.findOne({ email }).select('+password emailVerified');
 
   if (!user || !(await user.correctPassword(password, user.password))) {
     return next(new AppError('Incorrect email or password', 401));
   }
+
+  if (!user.emailVerified) {
+    return next(new AppError('The email address isnt verified', 401));
+  }
+
+  // remove the emailVerified field
+  user.emailVerified = undefined;
 
   // 3) If everything ok, send token to client
   createSendToken(user, 200, req, res);
@@ -101,7 +249,7 @@ exports.protect = catchAsync(async (req, res, next) => {
   const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
 
   // 3) Check if user still exists
-  let currentUser = await User.findById(decoded.id);
+  const currentUser = await User.findById(decoded.id);
   if (!currentUser) {
     return next(
       new AppError(

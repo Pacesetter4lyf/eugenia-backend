@@ -5,6 +5,10 @@ const authController = require('./../controllers/authController');
 const router = express.Router();
 
 router.post('/signup', authController.signup);
+router
+  .post('/verifyEmail/:email/:token', authController.verifyEmail)
+  .get('/verifyEmail/:email/:token', authController.verifyEmail);
+router.post('/resendVerifyEmail', authController.resendVerifyEmail);
 router.post('/login', authController.login);
 router.get('/logout', authController.logout);
 

@@ -131,6 +131,7 @@ exports.getUserResource = catchAsync(async (req, res, next) => {
 exports.getLineageResource = catchAsync(async (req, res, next) => {
   const userLineage = req.user.lineage;
   const userDataId = req.user.userDataId;
+  console.log('USERLINEAE ', userLineage)
   // give me all the resources
   // where the user is in the lineage of the user who has the resource
 
