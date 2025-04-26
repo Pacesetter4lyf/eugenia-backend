@@ -31,6 +31,7 @@ const joinCodeRouter = require('./routes/joinCodeRoutes');
 const postRouter = require('./routes/postRoutes');
 const profileRouter = require('./routes/profileRoutes');
 const mediaRouter = require('./routes/mediaRoutes');
+const settingsRoutes = require('./routes/settingRoutes');
 
 function createApp(databaseURL) {
   // Start express app
@@ -138,6 +139,7 @@ function createApp(databaseURL) {
   app.use('/api/v1/post', postRouter);
   app.use('/api/v1/profile', profileRouter);
   app.use('/api/v1/media', mediaRouter);
+  app.use('/api/v1/settings', settingsRoutes);
 
   app.all('*', (req, res, next) => {
     next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));

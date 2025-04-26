@@ -1,64 +1,58 @@
-const Setting = require('../models/settingModel');
-const UserData = require('../models/userDataModel');
-const factory = require('./handlerFactory');
+const Profile = require('../models/profileModel');
+const Media = require('../models/mediaModel');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
-const {getSetting, getFilter2, getViewer} = require('./utilityController');
 
-const { ObjectId } = require('mongodb');
+// PUT: Update visibility settings
+exports.updateVisibilitySettings = catchAsync(async (req, res, next) => {
+  const { userId } = req.user; // Assuming userId is available in req.user
+  const { visibility } = req.body;
 
-// exports.createJoinCode = catchAsync(async (req, res, next) => {});
-
-exports.getSchema = catchAsync(async (req, res, next) => {
-  const userId = req.params.id;
-  const setting = await Setting.findOne({ userData: userId }).select(
-    '-userData -__v -_id -id'
-  );
-
-  let updatedSetting;
-  if (setting)
-    updatedSetting = Object.entries(setting.toObject()).map(([key, value]) => ({
-      [key]: value
-    }));
-
-  let newSetting;
-  if (!setting) {
-    const schemaDefinition = Setting.schema.obj;
-    const keys = Object.keys(schemaDefinition).filter(
-      key => key !== 'userData'
+  if (!visibility) {
+    return next(
+      new AppError('Please provide visibility settings to update.', 400)
     );
-    newSetting = keys.map(key => ({ [key]: 'self' }));
   }
 
-  res.status(201).json({
+  // Update visibility in the Profile model
+  const updatedProfile = await Profile.findOneAndUpdate(
+    { userId },
+    { visibility },
+    { new: true, runValidators: true }
+  );
+
+  if (!updatedProfile) {
+    return next(new AppError('Profile not found for the user.', 404));
+  }
+
+  res.status(200).json({
     status: 'success',
     data: {
-      data: updatedSetting || newSetting
+      visibility: updatedProfile.visibility
     }
   });
 });
 
-exports.getSetting = catchAsync(async (req, res, next) => {
-  const setting = getSetting(req)
-  req.setting = setting
-  next();
-});
+// GET: Retrieve visibility settings
+exports.getVisibilitySettings = catchAsync(async (req, res, next) => {
+  const { userId } = req.user; // Assuming userId is available in req.user
 
-exports.updateUserSetting = catchAsync(async (req, res, next) => {
-  const userId = req.params.id;
+  // Get visibility settings from Profile model
+  const profile = await Profile.findOne({ userId }).select('visibility');
+  if (!profile) {
+    return next(new AppError('Profile not found for the user.', 404));
+  }
 
-  const setting = await Setting.findOneAndUpdate(
-    { userData: userId },
-    req.body,
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+  // Get media items with their viewableBy field
+  const mediaItems = await Media.find({ user: userId }).select(
+    'name viewableBy'
   );
 
-  const status = setting ? 'success' : 'fail';
-
-  res.status(201).json({
-    status: status,
+  res.status(200).json({
+    status: 'success',
     data: {
-      data: setting
+      profileVisibility: profile.visibility,
+      mediaVisibility: mediaItems
     }
   });
 });
