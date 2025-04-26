@@ -1,109 +1,75 @@
-// resource / rating / createdAt / ref to tour / ref to user
 const mongoose = require('mongoose');
 
 const postSchema = new mongoose.Schema(
   {
     title: {
       type: String,
-      required: [true, 'title cannot be empty!']
+      required: [true, 'A post must have a title'],
+      trim: true
     },
-    description: String,
-    isNotVisibleByLineage: {
-      type: Boolean,
-      default: false
-    },
-    isCommentsTurnedOff: {
-      type: Boolean
-    },
-    postBox: {
-      type: String
-    },
-    isFileUploaded: {
-      type: Boolean
-    },
-    uploadedFileType: {
-      type: String
-    },
-    fileUrl: {
+    content: {
       type: String,
-      default: ''
+      required: [true, 'A post must have content']
     },
-    poster: {
+    author: {
       type: mongoose.Schema.ObjectId,
-      ref: 'UserData'
+      ref: 'User',
+      required: [true, 'A post must have an author']
     },
-    datePosted: {
-      type: Date,
-      default: Date.now()
+    forPerson: {
+      type: mongoose.Schema.ObjectId,
+      ref: 'Profile',
+      required: [true, 'A post must be for someone']
     },
-    isEdited: {
+    isGroupPost: {
       type: Boolean,
       default: false
     },
-    dateEdited: {
-      type: Date,
-      default: Date.now()
-    },
-    isForPerson: {
-      type: Boolean,
-      defailt: false
-    },
-    personId: {
+    group: {
       type: mongoose.Schema.ObjectId,
-      ref: 'UserData'
+      ref: 'Group'
     },
-    forLineage: {
-      type: [Number]
-    },
-    isLineageResource: {
-      type: Boolean
-    },
-    likes: {
-      type: mongoose.Schema.ObjectId,
-      ref: 'UserData',
-      default: []
-    },
-    comments: {
-      type: [
-        {
-          userId: {
-            type: mongoose.Schema.ObjectId,
-            ref: 'UserData'
-          },
-          date: {
-            type: Date,
-            default: Date.now()
-          },
-          comment: {
-            type: String
-          },
-          likes: {
-            type: [mongoose.Schema.ObjectId],
-            ref: 'UserData'
-          }
+    comments: [
+      {
+        user: {
+          type: mongoose.Schema.ObjectId,
+          ref: 'User',
+          required: true
+        },
+        content: {
+          type: String,
+          required: true
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now
         }
-      ]
+      }
+    ],
+    lastCommentDate: {
+      type: Date,
+      default: Date.now
     },
-    status: {
-      type: String
+    commentsEnabled: {
+      type: Boolean,
+      default: true
+    },
+    isGroupResource: {
+      type: Boolean,
+      default: false
     }
   },
   {
-    session: true,
+    timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
   }
 );
 
-// resourceSchema.pre(/^find/, function(next) {
-//   console.log(this.toJSON);
-//   this.populate({
-//     path: 'user',
-//     select: 'firstName lastName '
-//   });
-
-//   next();
-// });
+// Virtual field for comments count
+postSchema.virtual('commentsCount').get(function() {
+  return this.comments.length;
+});
 
 const Post = mongoose.model('Post', postSchema);
 

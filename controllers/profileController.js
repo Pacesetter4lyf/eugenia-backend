@@ -110,8 +110,56 @@ exports.checkAndDeleteFromUploadCare = catchAsync(async (req, res, next) => {
   next();
 });
 
-exports.createProfile = factory.createOne(Profile);
+exports.createProfile = catchAsync(async (req, res, next) => {
+  // Check if the profile is being created for oneself
+  const { isSelf } = req.body;
+  if (isSelf) {
+    // If creating for oneself, set userId to req.user.userId
+    req.body.userId = req.user.userId;
+  }
+  req.body.createdBy = req.user.userId;
+
+  const doc = await Profile.create(req.body);
+
+  res.status(201).json({
+    status: 'success',
+    data: {
+      data: doc
+    }
+  });
+});
+
 exports.getProfile = factory.getOne(Profile);
 exports.getAllProfiles = factory.getAll(Profile);
 exports.updateProfile = factory.updateOne(Profile);
 exports.deleteProfile = factory.deleteOne(Profile);
+
+exports.getProfileByUserId = catchAsync(async (req, res, next) => {
+  const profile = await Profile.findOne({ userId: req.params.userId });
+
+  if (!profile) {
+    return next(new AppError('No profile found with that user ID', 404));
+  }
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      profile
+    }
+  });
+});
+
+exports.getProfileById = catchAsync(async (req, res, next) => {
+  const profile = await Profile.findById(req.params.id);
+
+  if (!profile) {
+    return next(new AppError('No profile found with that ID', 404));
+  }
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      profile
+    }
+  });
+});

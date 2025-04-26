@@ -26,7 +26,8 @@ const uploadFileToUploadCare = async req => {
       }
     });
     if (result && result.file) {
-      const baseMimeType = result.mime_type.split('/')[0];
+      // console.log(result, req.file);
+      const baseMimeType = req.file.mimetype.split('/')[0];
       req.body.url = `https://ucarecdn.com/${result.file}/`;
       req.body.mediaType = baseMimeType;
     }

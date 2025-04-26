@@ -2,10 +2,10 @@ const crypto = require('crypto');
 const { promisify } = require('util');
 const jwt = require('jsonwebtoken');
 const User = require('./../models/userModel');
-const UserData = require('./../models/userDataModel');
 const catchAsync = require('./../utils/catchAsync');
 const AppError = require('./../utils/appError');
 const Email = require('./../utils/email');
+const Profile = require('../models/profileModel');
 
 const signToken = id => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -267,19 +267,25 @@ exports.protect = catchAsync(async (req, res, next) => {
     );
   }
 
-  // the userData
-  const userData = await UserData.findOne({ userId: decoded.id });
+  // the user
+  const user = await User.findOne({ userId: decoded.id });
 
-  if (userData) {
-    currentUser.userDataId = userData.id;
-    currentUser.lineage = userData.lineage;
-    currentUser.createdBy = userData.createdBy;
-    currentUser.adminOf = userData.adminOf;
+  if (user) {
+    currentUser.userId = user.id;
+    currentUser.lineage = user.lineage;
+    currentUser.createdBy = user.createdBy;
+    currentUser.adminOf = user.adminOf;
   }
 
   // GRANT ACCESS TO PROTECTED ROUTE
   req.user = currentUser;
   res.locals.user = currentUser;
+
+  const profile = await Profile.findOne({ userId: req.user.id });
+  if (profile) {
+    req.user.profileId = profile._id;
+  }
+
   next();
 });
 

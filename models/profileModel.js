@@ -66,10 +66,10 @@ const profileSchema = new mongoose.Schema(
       default: 'active'
     },
 
-    // createdBy: {
-    //     type: mongoose.Schema.ObjectId,
-    //     ref: 'User'
-    // },
+    createdBy: {
+      type: mongoose.Schema.ObjectId,
+      ref: 'User'
+    },
     // editableBy: {
     //     type: [mongoose.Schema.ObjectId],
     //     ref: 'User'

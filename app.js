@@ -18,20 +18,11 @@ const { startSession } = require('mongoose');
 
 const AppError = require('./utils/appError');
 const globalErrorHandler = require('./controllers/errorController');
-const tourRouter = require('./routes/tourRoutes');
 const userRouter = require('./routes/userRoutes');
-const reviewRouter = require('./routes/reviewRoutes');
-const bookingRouter = require('./routes/bookingRoutes');
-const bookingController = require('./controllers/bookingController');
-const viewRouter = require('./routes/viewRoutes');
-const userDataRouter = require('./routes/userDataRoutes');
-const resourceRouter = require('./routes/resourceRoutes');
-const chatRouter = require('./routes/chatRoutes');
-const joinCodeRouter = require('./routes/joinCodeRoutes');
-const postRouter = require('./routes/postRoutes');
 const profileRouter = require('./routes/profileRoutes');
 const mediaRouter = require('./routes/mediaRoutes');
 const settingsRoutes = require('./routes/settingRoutes');
+const postRoutes = require('./routes/postRoutes');
 
 function createApp(databaseURL) {
   // Start express app
@@ -74,11 +65,11 @@ function createApp(databaseURL) {
   app.use('/api', limiter);
 
   // Stripe webhook, BEFORE body-parser, because stripe needs the body as stream
-  app.post(
-    '/webhook-checkout',
-    bodyParser.raw({ type: 'application/json' }),
-    bookingController.webhookCheckout
-  );
+  // app.post(
+  //   '/webhook-checkout',
+  //   bodyParser.raw({ type: 'application/json' }),
+  //   bookingController.webhookCheckout
+  // );
 
   // Body parser, reading data from body into req.body
   app.use(express.json({ limit: '10kb' }));
@@ -127,19 +118,12 @@ function createApp(databaseURL) {
   });
 
   // 3) ROUTES
-  app.use('/', viewRouter);
-  app.use('/api/v1/tours', tourRouter);
+  // app.use('/', viewRouter);
   app.use('/api/v1/users', userRouter);
-  app.use('/api/v1/reviews', reviewRouter);
-  app.use('/api/v1/bookings', bookingRouter);
-  app.use('/api/v1/userdata', userDataRouter);
-  app.use('/api/v1/resource', resourceRouter);
-  app.use('/api/v1/chat', chatRouter);
-  app.use('/api/v1/joincode', joinCodeRouter);
-  app.use('/api/v1/post', postRouter);
   app.use('/api/v1/profile', profileRouter);
   app.use('/api/v1/media', mediaRouter);
   app.use('/api/v1/settings', settingsRoutes);
+  app.use('/api/v1/posts', postRoutes);
 
   app.all('*', (req, res, next) => {
     next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));

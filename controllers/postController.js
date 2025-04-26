@@ -1,318 +1,238 @@
 const Post = require('../models/postModel');
-const factory = require('./handlerFactory');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
-exports.createPost = catchAsync(async (req, res, next) => {
-  const poster = req.user.userDataId;
-  const lineage = req.user.lineage;
-  const reqPost = req.body.postDetails;
-  const isEditing = req.body.isEditing;
-  // console.log('reqPost', reqPost);
-
-  const {
-    isForPerson,
-    title,
-    isCommentsTurnedOff,
-    isNotVisibleByLineage,
-    postBox,
-    personId,
-    id
-  } = reqPost;
-
-  let postDetails = {
-    postBox,
-    isForPerson,
-    title,
-    isCommentsTurnedOff,
-    postBox,
-    poster
-  };
-
-  if (reqPost.isForPerson) {
-    postDetails.personId = personId;
-    postDetails.isNotVisibleByLineage = isNotVisibleByLineage;
-  } else {
-    postDetails.forLineage = lineage;
-  }
-
-  let post;
-  if (!isEditing) {
-    post = await Post.create(postDetails);
-  } else {
-    delete postDetails.isForPerson;
-    delete postDetails.personId;
-    post = await Post.findByIdAndUpdate(id, postDetails, { new: true });
-  }
-
-  // Populate the personId field
-  await post
-    .populate('poster', 'firstName lastName _id lineage id')
-    .execPopulate();
-
-  res.status(200).json({
-    status: 'success',
-    data: {
-      data: post
-    }
-  });
-});
-
+// Get all posts with filtering
 exports.getAllPosts = catchAsync(async (req, res, next) => {
-  const userDataId = req.user.userDataId;
-  const lineage = req.user.lineage;
+  const { filter, personId } = req.query;
+  const userId = req.user.id;
 
-  // if forPerson, get if personId is in lineage
-  // if for lineage, get it
-  // get all where the user is the creator of the post
-  const pipeline = [
-    {
-      $lookup: {
-        from: 'userdatas',
-        localField: 'personId',
-        foreignField: '_id',
-        as: 'personId'
-      }
-    },
-    {
-      $lookup: {
-        from: 'userdatas',
-        localField: 'poster',
-        foreignField: '_id',
-        as: 'poster'
-      }
-    },
-    {
-      $addFields: {
-        personId: { $arrayElemAt: ['$personId', 0] },
-        poster: { $arrayElemAt: ['$poster', 0] }
-      }
-    },
-    {
-      $match: {
-        $or: [
-          {
-            isForPerson: true,
-            'personId.lineage': { $in: lineage }
-          },
-          {
-            isForPerson: false,
-            forLineage: { $in: lineage }
-          },
-          {
-            poster: userDataId
-          }
-        ]
-      }
-    },
-    // dfvdfv
-    {
-      $lookup: {
-        from: 'userdatas', // Replace with the actual User Model collection name
-        localField: 'comments.userId',
-        foreignField: '_id',
-        as: 'commentUsers'
-      }
-    },
-    {
-      $addFields: {
-        comments: {
-          $map: {
-            input: '$comments',
-            as: 'comment',
-            in: {
-              $mergeObjects: [
-                '$$comment',
-                {
-                  userId: {
-                    $cond: {
-                      if: { $eq: ['$$comment.commentUsers', []] }, // Check if the user array is empty
-                      then: {}, // If empty, provide an empty object
-                      else: {
-                        firstName: {
-                          $arrayElemAt: ['$commentUsers.firstName', 0]
-                        },
-                        lastName: {
-                          $arrayElemAt: ['$commentUsers.lastName', 0]
-                        },
-                        id: {
-                          $arrayElemAt: ['$commentUsers._id', 0]
-                        }
-                      }
-                    }
-                  }
-                }
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      $project: {
-        id: '$_id',
-        title: 1,
-        datePosted: 1,
-        postBox: 1,
-        comments: 1,
-        likes: 1,
-        // personId: 1,
-        isLineageResource: 1,
-        personId: '$personId._id',
-        poster: {
-          id: '$poster._id',
-          firstName: '$poster.firstName',
-          lastName: '$poster.lastName',
-          adminableBy: '$poster.adminableBy',
-          lineage: '$poster.lineage'
-        }
-      }
-    }
-  ];
+  let query = Post.find();
 
-  const post = await Post.aggregate(pipeline);
+  // Apply filters based on the frontend requirements
+  switch (filter) {
+    case 'createdByMe':
+      query = query.where('author').equals(userId);
+      break;
+    case 'createdForMe':
+      query = query.where('forPerson').equals(req.user.profileId);
+      break;
+    case 'createdFor':
+      if (!personId) {
+        return next(
+          new AppError(
+            'Please provide a person ID for the "createdFor" filter',
+            400
+          )
+        );
+      }
+      query = query.where('forPerson').equals(personId);
+      break;
+    case 'groupPosts':
+      query = query.where('isGroupPost').equals(true);
+      break;
+    default:
+      break;
+  }
+
+  // Populate author and forPerson details
+  query = query
+    .populate('author', 'firstName lastName')
+    .populate('forPerson', 'firstName lastName')
+    .sort('-createdAt');
+
+  const posts = await query;
 
   res.status(200).json({
     status: 'success',
+    results: posts.length,
     data: {
-      data: post
+      posts
     }
   });
 });
 
+// Get a single post
 exports.getPost = catchAsync(async (req, res, next) => {
-  const postId = req.params.id;
-  const post = await Post.findById(postId);
+  const post = await Post.findById(req.params.id)
+    .populate('author', 'firstName lastName')
+    .populate('forPerson', 'firstName lastName')
+    .populate('comments.user', 'firstName lastName');
 
-  // .populate(
-  //   'poster',
-  //   'firstName lastName _id lineage id'
-  // );
-
-  const populateOptions = [
-    { path: 'poster', select: 'firstName lastName _id lineage id adminableBy' },
-    { path: 'comments.userId', select: 'firstName _id id' }
-  ];
-  await post.populate(populateOptions).execPopulate();
+  if (!post) {
+    return next(new AppError('No post found with that ID', 404));
+  }
 
   res.status(200).json({
     status: 'success',
     data: {
-      data: post
+      post
     }
   });
 });
 
+// Create a new post
+exports.createPost = catchAsync(async (req, res, next) => {
+  const { title, content, forPerson, isGroupPost, group } = req.body;
+
+  const post = await Post.create({
+    title,
+    content,
+    author: req.user.profileId,
+    forPerson,
+    isGroupPost,
+    group
+  });
+
+  res.status(201).json({
+    status: 'success',
+    data: {
+      post
+    }
+  });
+});
+
+// Toggle comments on/off for a post
+exports.toggleComments = catchAsync(async (req, res, next) => {
+  const post = await Post.findById(req.params.id);
+
+  if (!post) {
+    return next(new AppError('No post found with that ID', 404));
+  }
+
+  // Check if the user is the author
+  if (post.author.toString() !== req.user.id) {
+    return next(
+      new AppError('You can only toggle comments on your own posts', 403)
+    );
+  }
+
+  const updatedPost = await Post.findByIdAndUpdate(
+    req.params.id,
+    { commentsEnabled: !post.commentsEnabled },
+    { new: true, runValidators: true }
+  );
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      post: updatedPost
+    }
+  });
+});
+
+// Set a post as a group resource
+exports.setAsGroupResource = catchAsync(async (req, res, next) => {
+  const post = await Post.findById(req.params.id);
+
+  if (!post) {
+    return next(new AppError('No post found with that ID', 404));
+  }
+
+  // Check if the user is the author
+  if (post.author.toString() !== req.user.id) {
+    return next(
+      new AppError('You can only set your own posts as group resources', 403)
+    );
+  }
+
+  const updatedPost = await Post.findByIdAndUpdate(
+    req.params.id,
+    { isGroupResource: true },
+    { new: true, runValidators: true }
+  );
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      post: updatedPost
+    }
+  });
+});
+
+// Update the addComment function to check if comments are enabled
+exports.addComment = catchAsync(async (req, res, next) => {
+  const { content } = req.body;
+
+  const post = await Post.findById(req.params.id);
+
+  if (!post) {
+    return next(new AppError('No post found with that ID', 404));
+  }
+
+  // Check if comments are enabled
+  if (!post.commentsEnabled) {
+    return next(new AppError('Comments are disabled for this post', 403));
+  }
+
+  const updatedPost = await Post.findByIdAndUpdate(
+    req.params.id,
+    {
+      $push: {
+        comments: {
+          user: req.user.id,
+          content
+        }
+      },
+      lastCommentDate: Date.now()
+    },
+    {
+      new: true,
+      runValidators: true
+    }
+  ).populate('comments.user', 'firstName lastName');
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      post: updatedPost
+    }
+  });
+});
+
+// Update a post
 exports.updatePost = catchAsync(async (req, res, next) => {
-  const postId = req.params.id;
-  const userId = req.user.userDataId;
-  const newComment = req.body.comment;
+  const post = await Post.findById(req.params.id);
 
-  const toBeUpdated = {
-    userId,
-    comment: newComment
-  };
-  console.log('newc', toBeUpdated);
-
-  let updated;
-  if (newComment) {
-    updated = await Post.findByIdAndUpdate(
-      postId,
-      { $push: { comments: toBeUpdated } },
-      { new: true }
-    );
-  } else {
-    updated = await Post.findById(postId);
+  if (!post) {
+    return next(new AppError('No post found with that ID', 404));
   }
 
-  const populateOptions = [
-    { path: 'poster', select: 'firstName lastName _id lineage id adminableBy' },
-    { path: 'comments.userId', select: 'firstName _id id' }
-  ];
-  await updated.populate(populateOptions).execPopulate();
-  // await updated
-  //   .populate('poster', 'firstName lastName _id lineage id')
-  //   .execPopulate();
-  console.log('updated  ', updated);
-  res.status(200).json({
-    status: 'success',
-    data: {
-      data: updated
-    }
-  });
-});
-
-exports.like = catchAsync(async (req, res, next) => {
-  const id = req.params.id;
-  const todo = req.body.like;
-  const userDataId = req.user.userDataId;
-
-  let operation;
-  if (todo === 'like') {
-    operation = { $push: { likes: userDataId } };
-  } else {
-    operation = { $pull: { likes: userDataId } };
+  // Check if the user is the author
+  if (post.author.toString() !== req.user.id) {
+    return next(new AppError('You can only update your own posts', 403));
   }
 
-  const response = await Post.findOneAndUpdate({ _id: id }, operation, {
-    new: true
+  const updatedPost = await Post.findByIdAndUpdate(req.params.id, req.body, {
+    new: true,
+    runValidators: true
   });
-  console.log(todo);
 
   res.status(200).json({
     status: 'success',
     data: {
-      data: response.likes
+      post: updatedPost
     }
   });
 });
 
-exports.patchPost = catchAsync(async (req, res, next) => {
-  const id = req.params.id;
-  const todo = req.body.todo;
-  const value = req.body.value;
-  const userDataId = req.user.userDataId;
-
-  let response;
-  if (todo === 'enableComment') {
-    response = await Post.findOneAndUpdate(
-      { _id: id },
-      { isCommentsTurnedOff: value },
-      {
-        new: true
-      }
-    );
-  } else if (todo === 'lineageResource') {
-    response = await Post.findOneAndUpdate(
-      { _id: id },
-      { isLineageResource: value },
-      {
-        new: true
-      }
-    );
-  }
-
-  console.log(todo);
-  const populateOptions = [
-    { path: 'poster', select: 'firstName lastName _id lineage id adminableBy' },
-    { path: 'comments.userId', select: 'firstName _id id' }
-  ];
-  await response.populate(populateOptions).execPopulate();
-
-  res.status(200).json({
-    status: 'success',
-    data: {
-      data: response
-    }
-  });
-});
-
+// Delete a post
 exports.deletePost = catchAsync(async (req, res, next) => {
-  const resource = '1234';
-  res.status(200).json({
+  const post = await Post.findById(req.params.id);
+
+  if (!post) {
+    return next(new AppError('No post found with that ID', 404));
+  }
+
+  // Check if the user is the author
+  if (post.author.toString() !== req.user.id) {
+    return next(new AppError('You can only delete your own posts', 403));
+  }
+
+  await Post.findByIdAndDelete(req.params.id);
+
+  res.status(204).json({
     status: 'success',
-    data: {
-      data: resource
-    }
+    data: null
   });
 });

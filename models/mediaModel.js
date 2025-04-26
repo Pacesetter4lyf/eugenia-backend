@@ -38,7 +38,7 @@ const mediaSchema = new mongoose.Schema(
     },
     hiddenTo: {
       type: String,
-      default: 'self'
+      default: 'public'
     }
   },
   {
