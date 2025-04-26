@@ -29,6 +29,8 @@ const resourceRouter = require('./routes/resourceRoutes');
 const chatRouter = require('./routes/chatRoutes');
 const joinCodeRouter = require('./routes/joinCodeRoutes');
 const postRouter = require('./routes/postRoutes');
+const profileRouter = require('./routes/profileRoutes');
+const mediaRouter = require('./routes/mediaRoutes');
 
 function createApp(databaseURL) {
   // Start express app
@@ -134,7 +136,9 @@ function createApp(databaseURL) {
   app.use('/api/v1/chat', chatRouter);
   app.use('/api/v1/joincode', joinCodeRouter);
   app.use('/api/v1/post', postRouter);
-
+  app.use('/api/v1/profile', profileRouter);
+  app.use('/api/v1/media', mediaRouter);
+  
   app.all('*', (req, res, next) => {
     next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));
   });

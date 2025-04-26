@@ -143,6 +143,7 @@ exports.verifyEmail = catchAsync(async (req, res, next) => {
     .digest('hex');
 
   const user = await User.findOne({
+    email: req.params.email,
     emailVerifyToken: hashedToken,
     emailVerifyExpires: {
       $gt: Date.now()
