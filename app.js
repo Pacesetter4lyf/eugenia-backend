@@ -116,8 +116,8 @@ function createApp(databaseURL) {
   // Middleware to start session
   app.use(async (req, res, next) => {
     try {
-      const session = await mongoose.startSession();
-      req.session = session;
+      const mongoSession = await mongoose.startSession();
+      req.session = mongoSession;
       next();
     } catch (error) {
       console.error('Error occurred while starting session:', error);
@@ -138,7 +138,7 @@ function createApp(databaseURL) {
   app.use('/api/v1/post', postRouter);
   app.use('/api/v1/profile', profileRouter);
   app.use('/api/v1/media', mediaRouter);
-  
+
   app.all('*', (req, res, next) => {
     next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));
   });
