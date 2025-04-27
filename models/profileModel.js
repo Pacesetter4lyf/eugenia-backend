@@ -70,47 +70,30 @@ const profileSchema = new mongoose.Schema(
       type: mongoose.Schema.ObjectId,
       ref: 'User'
     },
-    // editableBy: {
-    //     type: [mongoose.Schema.ObjectId],
-    //     ref: 'User'
-    // },
-    // adminOf: {
-    //     type: [Number]
-    // },
-    // joinCode: {
-    //     type: [Number]
-    // },
-    // father: {
-    //     type: mongoose.Schema.ObjectId,
-    //     ref: 'UserData'
-    // },
-    // mother: {
-    //     type: mongoose.Schema.ObjectId,
-    //     ref: 'UserData'
-    // },
-    // wife: {
-    //     type: [mongoose.Schema.ObjectId],
-    //     ref: 'UserData'
-    // },
-    // husband: {
-    //     type: [mongoose.Schema.ObjectId],
-    //     ref: 'UserData'
-    // },
 
-    // child: {
-    //     type: [mongoose.Schema.ObjectId],
-    //     ref: 'UserData'
-    // },
-    // sibling: {
-    //     type: [mongoose.Schema.ObjectId],
-    //     ref: 'UserData'
-    // },
-    // lineage: {
-    //     type: [Number],
-    //     default: function () {
-    //         return [Math.floor(100000 + Math.random() * 900000)];
-    //     }
-    // },
+    groups: [
+      {
+        groupId: {
+          type: mongoose.Schema.ObjectId,
+          ref: 'Group',
+          required: true
+        },
+        isAdmin: {
+          type: Boolean,
+          default: false
+        },
+        joinedAt: {
+          type: Date,
+          default: Date.now
+        },
+        status: {
+          type: String,
+          enum: ['member', 'invited', 'pending'],
+          default: 'member'
+        }
+      }
+    ],
+
     visibility: {
       firstName: { type: Number, enum: VISIBILITY_LEVELS, default: 1 },
       lastName: { type: Number, enum: VISIBILITY_LEVELS, default: 1 },
@@ -154,6 +137,35 @@ profileSchema.pre('findByIdAndUpdate', function(next) {
   }
   // now remove the user id from the object
   delete this.getUpdate().queryUserId;
+  next();
+});
+
+// Pre-save middleware to prevent unauthorized updates
+profileSchema.pre('save', function(next) {
+  // Skip check for new documents
+  if (this.isNew) return next();
+
+  // Check if createdBy is being modified
+  if (this.isModified('createdBy')) {
+    const error = new Error('Cannot modify the creator of a profile');
+    error.status = 403;
+    return next(error);
+  }
+
+  next();
+});
+
+// Pre-findOneAndUpdate middleware to prevent unauthorized updates
+profileSchema.pre('findOneAndUpdate', function(next) {
+  const update = this.getUpdate();
+  
+  // Check if createdBy is being modified
+  if (update && update.$set && update.$set.createdBy) {
+    const error = new Error('Cannot modify the creator of a profile');
+    error.status = 403;
+    return next(error);
+  }
+
   next();
 });
 

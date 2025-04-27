@@ -16,6 +16,7 @@ router.post(
 
 router.get('/mymedia', mediaController.getMyMedia);
 router.get('/theirmedia/:user', mediaController.getTheirMedia);
+router.get('/filtered', mediaController.getFilteredMedia);
 router
   .route('/:id')
   .get(mediaController.getMedia)

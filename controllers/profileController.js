@@ -131,8 +131,54 @@ exports.createProfile = catchAsync(async (req, res, next) => {
 
 exports.getProfile = factory.getOne(Profile);
 exports.getAllProfiles = factory.getAll(Profile);
-exports.updateProfile = factory.updateOne(Profile);
-exports.deleteProfile = factory.deleteOne(Profile);
+exports.updateProfile = catchAsync(async (req, res, next) => {
+  const profile = await Profile.findById(req.params.id);
+
+  if (!profile) {
+    return next(new AppError('No profile found with that ID', 404));
+  }
+
+  // Check if user is the creator
+  if (profile.createdBy.toString() !== req.user.id) {
+    return next(new AppError('You do not have permission to update this profile', 403));
+  }
+
+  const updatedProfile = await Profile.findByIdAndUpdate(
+    req.params.id,
+    req.body,
+    {
+      new: true,
+      runValidators: true
+    }
+  );
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      profile: updatedProfile
+    }
+  });
+});
+
+exports.deleteProfile = catchAsync(async (req, res, next) => {
+  const profile = await Profile.findById(req.params.id);
+
+  if (!profile) {
+    return next(new AppError('No profile found with that ID', 404));
+  }
+
+  // Check if user is the creator
+  if (profile.createdBy.toString() !== req.user.id) {
+    return next(new AppError('You do not have permission to delete this profile', 403));
+  }
+
+  await Profile.findByIdAndDelete(req.params.id);
+
+  res.status(204).json({
+    status: 'success',
+    data: null
+  });
+});
 
 exports.getProfileByUserId = catchAsync(async (req, res, next) => {
   const profile = await Profile.findOne({ userId: req.params.userId });

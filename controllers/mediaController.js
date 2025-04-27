@@ -8,6 +8,9 @@ const multer = require('multer');
 const Media = require('../models/mediaModel');
 const catchAsync = require('../utils/catchAsync');
 const factory = require('./handlerFactory');
+const AppError = require('../utils/appError');
+const Lineage = require('../models/lineageModel');
+const Group = require('../models/groupModel');
 
 const multerStorage = multer.memoryStorage();
 const upload = multer({
@@ -110,5 +113,105 @@ exports.getTheirMedia = catchAsync(async (req, res, next) => {
 exports.getMedia = factory.getOne(Media);
 exports.getAllMedias = factory.getAll(Media);
 exports.createMedia = factory.createOne(Media);
-exports.updateMedia = factory.updateOne(Media);
-exports.deleteMedia = factory.deleteOne(Media);
+exports.updateMedia = catchAsync(async (req, res, next) => {
+  const media = await Media.findById(req.params.id);
+
+  if (!media) {
+    return next(new AppError('No media found with that ID', 404));
+  }
+
+  // Check if user is the owner
+  if (media.user.toString() !== req.user.id) {
+    return next(
+      new AppError('You do not have permission to update this media', 403)
+    );
+  }
+
+  const updatedMedia = await Media.findByIdAndUpdate(req.params.id, req.body, {
+    new: true,
+    runValidators: true
+  });
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      media: updatedMedia
+    }
+  });
+});
+exports.deleteMedia = catchAsync(async (req, res, next) => {
+  const media = await Media.findById(req.params.id);
+
+  if (!media) {
+    return next(new AppError('No media found with that ID', 404));
+  }
+
+  // Check if user is the owner
+  if (media.user.toString() !== req.user.id) {
+    return next(
+      new AppError('You do not have permission to delete this media', 403)
+    );
+  }
+
+  // Delete from uploadcare first
+  await deleteUploadCareFile(media.url);
+
+  await Media.findByIdAndDelete(req.params.id);
+
+  res.status(204).json({
+    status: 'success',
+    data: null
+  });
+});
+
+exports.getFilteredMedia = catchAsync(async (req, res, next) => {
+  const { lineageId, groupId, mediaType } = req.query;
+  let query = {};
+
+  // If filtering by lineage
+  if (lineageId) {
+    const lineage = await Lineage.findById(lineageId);
+    if (!lineage) {
+      return next(new AppError('Lineage not found', 404));
+    }
+    query = {
+      user: { $in: lineage.lineageMembers.map(member => member.profileId) }
+    };
+  }
+
+  // If filtering by group
+  if (groupId) {
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return next(new AppError('Group not found', 404));
+    }
+    query = {
+      ...query,
+      user: { $in: group.members.map(member => member.user) }
+    };
+  }
+
+  // If filtering by media type
+  if (mediaType) {
+    query = {
+      ...query,
+      mediaType: mediaType
+    };
+  }
+
+  // Get media with populated user details
+  const media = await Media.find(query)
+    .select('-viewableBy -hiddenTo')
+    .populate({
+      path: 'user',
+      select: 'firstName lastName'
+    });
+
+  res.status(200).json({
+    status: 'success',
+    results: media.length,
+    data: {
+      media
+    }
+  });
+});

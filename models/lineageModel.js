@@ -1,50 +1,43 @@
 const mongoose = require('mongoose');
 
-const lineageSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      trim: true
-    },
-    description: {
-      type: String,
-      trim: true
-    },
-    createdBy: {
-      type: mongoose.Schema.ObjectId,
-      ref: 'User',
-      required: [true, 'A lineage must have a creator']
-    },
-    members: [
-      {
-        user: {
-          type: mongoose.Schema.ObjectId,
-          ref: 'User',
-          required: true
-        },
-        joinedAt: {
-          type: Date,
-          default: Date.now
-        }
-      }
-    ],
-    isActive: {
-      type: Boolean,
-      default: true
-    }
+const lineageMemberSchema = new mongoose.Schema({
+  profileId: {
+    type: mongoose.Schema.ObjectId,
+    ref: 'Profile',
+    required: [true, 'Profile ID is required']
   },
-  {
-    timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true }
+  addedAt: {
+    type: Date,
+    default: Date.now
   }
-);
+});
 
-// Virtual field for members count
-lineageSchema.virtual('membersCount').get(function() {
-  return this.members.length;
+const lineageSchema = new mongoose.Schema({
+  profileId: {
+    type: mongoose.Schema.ObjectId,
+    ref: 'Profile',
+    required: [true, 'Profile ID is required'],
+    unique: true,
+    index: true
+  },
+  lineageMembers: [lineageMemberSchema],
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+// Prevent duplicate members in lineage
+lineageSchema.pre('save', function(next) {
+  const seen = new Set();
+  this.lineageMembers = this.lineageMembers.filter(member => {
+    const duplicate = seen.has(member.profileId.toString());
+    seen.add(member.profileId.toString());
+    return !duplicate;
+  });
+  next();
 });
 
 const Lineage = mongoose.model('Lineage', lineageSchema);
 
-module.exports = Lineage; 
+module.exports = Lineage;
