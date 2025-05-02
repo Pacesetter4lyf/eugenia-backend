@@ -8,34 +8,43 @@ const Relationship = require('../models/relationshipModel');
  */
 exports.getRelatedProfiles = async (profileId, depth = 3) => {
   const visited = new Set();
-  const toVisit = [{ id: profileId, depth: 0 }];
+  let currentLevel = [{ id: profileId, depth: 0 }];
   const relatedProfiles = new Set();
 
-  while (toVisit.length > 0) {
-    const { id, depth: currentDepth } = toVisit.shift();
-    
-    if (visited.has(id) || currentDepth > depth) continue;
-    
-    visited.add(id);
-    relatedProfiles.add(id);
+  // Process profiles level by level until max depth is reached or no more profiles to visit
+  while (currentLevel.length > 0 && currentLevel[0].depth <= depth) {
+    const nextLevelPromises = currentLevel
+      .filter(({ id }) => !visited.has(id))
+      .map(({ id, depth: currentDepth }) => {
+        visited.add(id);
+        relatedProfiles.add(id);
 
-    // Get the relationship document for this profile
-    const relationship = await Relationship.findOne({ profileId: id });
-    if (!relationship) continue;
+        // Return a promise for fetching relationships
+        return Relationship.findOne({ profileId: id }).then(relationship => {
+          if (!relationship) return [];
 
-    // Get all related profiles from parents, siblings, spouses, and children
-    const relatedIds = [
-      ...relationship.parents.map(p => p.profile.toString()),
-      ...relationship.siblings.map(s => s.profile.toString()),
-      ...relationship.spouses.map(s => s.profile.toString()),
-      ...relationship.children.map(c => c.profile.toString())
-    ];
+          // Get all related profiles from parents, siblings, spouses, and children
+          const relatedIds = [
+            ...relationship.parents.map(p => p.profile.toString()),
+            ...relationship.siblings.map(s => s.profile.toString()),
+            ...relationship.spouses.map(s => s.profile.toString()),
+            ...relationship.children.map(c => c.profile.toString())
+          ];
 
-    for (const relatedId of relatedIds) {
-      if (!visited.has(relatedId)) {
-        toVisit.push({ id: relatedId, depth: currentDepth + 1 });
-      }
-    }
+          // Return next level's nodes
+          return relatedIds
+            .filter(relatedId => !visited.has(relatedId))
+            .map(relatedId => ({
+              id: relatedId,
+              depth: currentDepth + 1
+            }));
+        });
+      });
+
+    const nextLevel = (await Promise.all(nextLevelPromises)).flat();
+
+    // Flatten and set as current level for next iteration
+    currentLevel = nextLevel.flat();
   }
 
   return Array.from(relatedProfiles);
@@ -74,4 +83,4 @@ exports.getReverseRelationshipType = (type, gender) => {
     default:
       return null;
   }
-}; 
+};

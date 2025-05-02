@@ -8,35 +8,43 @@ const router = express.Router();
 router.use(authController.protect);
 
 // Relationship creation routes
-router.post('/father', 
+router.post(
+  '/father',
   relationshipController.validateRelationship,
   relationshipController.fatherOf
 );
-router.post('/mother', 
+router.post(
+  '/mother',
   relationshipController.validateRelationship,
   relationshipController.motherOf
 );
-router.post('/son', 
+router.post(
+  '/son',
   relationshipController.validateRelationship,
   relationshipController.sonOf
 );
-router.post('/daughter', 
+router.post(
+  '/daughter',
   relationshipController.validateRelationship,
   relationshipController.daughterOf
 );
-router.post('/brother', 
+router.post(
+  '/brother',
   relationshipController.validateRelationship,
   relationshipController.brotherOf
 );
-router.post('/sister', 
+router.post(
+  '/sister',
   relationshipController.validateRelationship,
   relationshipController.sisterOf
 );
-router.post('/husband', 
+router.post(
+  '/husband',
   relationshipController.validateRelationship,
   relationshipController.husbandOf
 );
-router.post('/wife', 
+router.post(
+  '/wife',
   relationshipController.validateRelationship,
   relationshipController.wifeOf
 );
@@ -44,4 +52,4 @@ router.post('/wife',
 router.get('/tree/:profileId', relationshipController.getTree);
 router.post('/tree', relationshipController.getTree);
 
-module.exports = router; 
+module.exports = router;

@@ -28,7 +28,9 @@ const lineageRoutes = require('./routes/lineageRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const favouriteRoutes = require('./routes/favouriteRoutes');
 const relationshipRoutes = require('./routes/relationshipRoutes');
+const unlinkRelationshipRoutes = require('./routes/unlinkRelationshipRoutes');
 const birthdayRoutes = require('./routes/birthdayRoutes');
+const requestRoutes = require('./routes/requestRoutes');
 
 function createApp(databaseURL) {
   // Start express app
@@ -135,7 +137,9 @@ function createApp(databaseURL) {
   app.use('/api/v1/search', searchRoutes);
   app.use('/api/v1/favourites', favouriteRoutes);
   app.use('/api/v1/relationships', relationshipRoutes);
+  app.use('/api/v1/unlink-relationships', unlinkRelationshipRoutes);
   app.use('/api/v1/birthdays', birthdayRoutes);
+  app.use('/api/v1/requests', requestRoutes);
 
   app.all('*', (req, res, next) => {
     next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));
